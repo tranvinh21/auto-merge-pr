@@ -1,7 +1,7 @@
 name: Auto Merge Pull Requests
 on:
   pull_request:
-    types: [opened, reopened, ready_for_review]
+    types: [opened]
   workflow_dispatch:
     inputs:
       merge_method:
@@ -54,10 +54,17 @@ jobs:
           PR_TITLE=$(echo "$PR_DETAILS" | jq -r '.title')
           PR_HEAD=$(echo "$PR_DETAILS" | jq -r '.head.ref')
           PR_BASE=$(echo "$PR_DETAILS" | jq -r '.base.ref')
+          PR_DRAFT=$(echo "$PR_DETAILS" | jq -r '.draft')
 
           echo "PR #$PR_NUMBER: '$PR_TITLE'"
           echo "Branches: $PR_HEAD → $PR_BASE"
-          echo "PR Status: State=$PR_STATE, Mergeable=$MERGEABLE, MergeableState=$MERGEABLE_STATE"
+          echo "PR Status: State=$PR_STATE, Draft=$PR_DRAFT, Mergeable=$MERGEABLE, MergeableState=$MERGEABLE_STATE"
+
+          # Skip draft PRs
+          if [ "$PR_DRAFT" = "true" ]; then
+            echo "⏭️ Skipping PR #$PR_NUMBER as it's in draft state"
+            exit 0
+          fi
 
           # Force GitHub to recalculate the mergeable status by updating the PR
           # This is a workaround for GitHub's async mergeable calculation
@@ -110,6 +117,12 @@ jobs:
             if [ "$MERGE_SUCCESS" = "true" ]; then
               echo "✅ PR #$PR_NUMBER has been auto-merged successfully"
               echo "Merged commit: $(echo "$MERGE_RESPONSE" | jq -r '.sha')"
+              
+              # Add comment to PR to indicate it was auto-merged
+              curl -s -X POST -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+                -H "Accept: application/vnd.github.v3+json" \
+                "https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
+                -d "{\"body\":\"🤖 This PR was automatically merged upon creation.\"}"
             else
               MERGE_ERROR=$(echo "$MERGE_RESPONSE" | jq -r '.message')
               echo "❌ Failed to merge PR: $MERGE_ERROR"

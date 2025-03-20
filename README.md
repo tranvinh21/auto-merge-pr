@@ -1,15 +1,22 @@
 # GitHub Auto-Merge Pull Request Action
 
-This GitHub Action automatically merges pull requests when they are created, reopened, or marked as ready for review.
+This GitHub Action automatically merges pull requests when they are created.
 
 ## How It Works
 
-When a pull request is opened, reopened, or marked as ready for review, this action:
+The Auto-Merge Pull Request Action has two modes:
 
-1. Checks if the pull request is mergeable
-2. Waits for GitHub to calculate the mergeable status if needed
-3. Automatically merges the pull request if it's mergeable
-4. Provides detailed logs about the merge process
+1. **Event-triggered**: When a pull request is opened, it attempts to merge it immediately
+2. **Manual trigger**: You can manually run the workflow on a specific PR by providing its number
+
+When it runs, the action:
+
+1. Verifies the PR is not in draft state
+2. Checks if the pull request is mergeable
+3. Waits for GitHub to calculate the mergeable status if needed
+4. Automatically merges the pull request if it's mergeable
+5. Adds a comment to the PR indicating it was auto-merged upon creation
+6. Provides detailed logs about the merge process
 
 ## Setup Instructions
 
@@ -43,32 +50,25 @@ The workflow file is already set up at `.github/workflows/auto-merge-pr.yml`. It
 
 ### Merge Method
 
-By default, the action uses the "merge" method to merge pull requests. You can customize this by adding an input parameter to your workflow:
+The action supports three merge methods:
 
-```yaml
-on:
-  pull_request:
-    types: [opened, reopened, ready_for_review]
-  workflow_dispatch:
-    inputs:
-      merge_method:
-        description: 'Merge method (merge, squash, rebase)'
-        required: false
-        default: 'merge'
-        type: choice
-        options:
-          - merge
-          - squash
-          - rebase
-```
+- **merge** (default): Creates a merge commit
+- **squash**: Squashes all commits into a single commit
+- **rebase**: Rebases and fast-forwards the PR commits
 
-This allows you to trigger the workflow manually and select a merge method.
+### Manual Triggers
+
+You can manually trigger the workflow with these options:
+
+- **merge_method**: Choose between merge, squash, and rebase
+- **pr_number**: Specify the PR number to process (required)
 
 ## Limitations
 
 - The action will only merge pull requests that GitHub considers mergeable
 - Pull requests with merge conflicts, failing checks, or required reviews will not be merged
 - Branch protection rules still apply
+- Draft PRs will be skipped
 
 ## Troubleshooting
 
