@@ -6,8 +6,7 @@ This GitHub Action automatically merges pull requests when they are created, reo
 
 When a pull request is opened, reopened, or marked as ready for review, this action:
 
-1. Checks if the pull request is mergeable
-2. Waits for GitHub to calculate the mergeable status if needed
+1. Checks if the pull request is mergeable\\e mergeable status if needed
 3. Automatically merges the pull request if it's mergeable
 4. Provides detailed logs about the merge process
 
