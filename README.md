@@ -72,13 +72,46 @@ This allows you to trigger the workflow manually and select a merge method.
 
 ## Troubleshooting
 
-If the action fails to merge a pull request, check the workflow logs for detailed error messages. Common issues include:
+If the action fails to merge a pull request, check the workflow logs for detailed error messages. The action includes comprehensive error reporting to help diagnose issues.
 
-- Insufficient permissions for the personal access token
-- Branch protection rules preventing the merge
-- Pull request has merge conflicts
-- Required status checks are failing
-- Required reviews are missing
+### Common Issues and Solutions
+
+#### Mergeable Status is Null
+
+GitHub calculates the mergeable status asynchronously, and sometimes it may remain `null` even after multiple attempts to check. The action includes several workarounds:
+
+- It forces GitHub to recalculate the mergeable status by updating the PR
+- It waits for up to 10 attempts with 10-second intervals
+- If the mergeable status is still `null` but the mergeable state is `clean`, it will attempt to merge anyway
+
+#### Permission Issues
+
+If you see errors related to permissions:
+
+- Ensure your Personal Access Token has the `repo` scope (full control of private repositories)
+- For public repositories, you may need only the `public_repo` scope
+- If you're using branch protection rules, ensure the token belongs to a user with bypass permissions or that all required checks are passing
+
+#### Branch Protection Rules
+
+If your repository uses branch protection rules:
+
+- Required status checks must be passing
+- Required reviews must be approved
+- The token must belong to a user with permission to bypass protections, or all requirements must be met
+
+#### Merge Conflicts
+
+If the PR has merge conflicts:
+
+- The action will detect this and report it in the logs
+- You'll need to resolve the conflicts manually or update the PR branch
+
+#### Other Issues
+
+- If the PR branch is behind the base branch, the action will report this
+- If required status checks are failing, the action will detect and report this
+- If the PR is blocked by branch protection rules, this will be indicated in the logs
 
 ## License
 

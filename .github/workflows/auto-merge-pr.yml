@@ -40,37 +40,66 @@ jobs:
           PR_DETAILS=$(curl -s -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER")
 
+          # Check if PR exists
+          PR_STATE=$(echo "$PR_DETAILS" | jq -r '.state')
+          if [ "$PR_STATE" = "null" ] || [ -z "$PR_STATE" ]; then
+            echo "❌ Error: Pull request #$PR_NUMBER not found or API returned invalid data"
+            echo "API Response: $(echo "$PR_DETAILS" | jq -r '.message')"
+            exit 1
+          fi
+
           # Extract PR information
           MERGEABLE=$(echo "$PR_DETAILS" | jq -r '.mergeable')
           MERGEABLE_STATE=$(echo "$PR_DETAILS" | jq -r '.mergeable_state')
           PR_TITLE=$(echo "$PR_DETAILS" | jq -r '.title')
+          PR_HEAD=$(echo "$PR_DETAILS" | jq -r '.head.ref')
+          PR_BASE=$(echo "$PR_DETAILS" | jq -r '.base.ref')
 
-          echo "PR Status: Mergeable=$MERGEABLE, State=$MERGEABLE_STATE"
+          echo "PR #$PR_NUMBER: '$PR_TITLE'"
+          echo "Branches: $PR_HEAD → $PR_BASE"
+          echo "PR Status: State=$PR_STATE, Mergeable=$MERGEABLE, MergeableState=$MERGEABLE_STATE"
+
+          # Force GitHub to recalculate the mergeable status by updating the PR
+          # This is a workaround for GitHub's async mergeable calculation
+          echo "Triggering mergeable status recalculation..."
+          curl -s -X PUT -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER" \
+            -d "{\"title\":\"$PR_TITLE\"}" > /dev/null
 
           # Wait for mergeable status if it's null (GitHub is still calculating)
           if [ "$MERGEABLE" = "null" ]; then
             echo "Waiting for GitHub to calculate mergeable status..."
-            for i in {1..5}; do
-              sleep 5
+            MAX_ATTEMPTS=10
+            for i in $(seq 1 $MAX_ATTEMPTS); do
+              sleep 10
               PR_DETAILS=$(curl -s -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
                 "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER")
               MERGEABLE=$(echo "$PR_DETAILS" | jq -r '.mergeable')
               MERGEABLE_STATE=$(echo "$PR_DETAILS" | jq -r '.mergeable_state')
-              echo "Attempt $i: Mergeable=$MERGEABLE, State=$MERGEABLE_STATE"
+              echo "Attempt $i/$MAX_ATTEMPTS: Mergeable=$MERGEABLE, State=$MERGEABLE_STATE"
               if [ "$MERGEABLE" != "null" ]; then
                 break
               fi
             done
           fi
 
-          if [ "$MERGEABLE" = "true" ]; then
+          # If mergeable is still null after waiting, try to proceed anyway if state is clean
+          if [ "$MERGEABLE" = "null" ] && [ "$MERGEABLE_STATE" = "clean" ]; then
+            echo "⚠️ Warning: GitHub did not calculate mergeable status, but state is 'clean'. Attempting merge anyway."
+            MERGEABLE="true"
+          fi
+
+          if [ "$MERGEABLE" = "true" ] || [ "$MERGEABLE_STATE" = "clean" ]; then
             echo "PR is mergeable, proceeding with merge"
             
             # Set merge method based on repository settings or preference
             # Options: merge, squash, rebase
             MERGE_METHOD="${{ github.event.inputs.merge_method || 'merge' }}"
+            echo "Using merge method: $MERGE_METHOD"
             
             # Merge the PR
+            echo "Sending merge request to GitHub API..."
             MERGE_RESPONSE=$(curl -X PUT -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/merge" \
@@ -80,14 +109,46 @@ jobs:
             
             if [ "$MERGE_SUCCESS" = "true" ]; then
               echo "✅ PR #$PR_NUMBER has been auto-merged successfully"
+              echo "Merged commit: $(echo "$MERGE_RESPONSE" | jq -r '.sha')"
             else
               MERGE_ERROR=$(echo "$MERGE_RESPONSE" | jq -r '.message')
               echo "❌ Failed to merge PR: $MERGE_ERROR"
+              echo "Full response: $MERGE_RESPONSE"
+              
+              # Check if it's a permission issue
+              if [[ "$MERGE_ERROR" == *"Required status check"* ]] || [[ "$MERGE_ERROR" == *"required status"* ]]; then
+                echo "This appears to be related to required status checks. Make sure all required checks have passed."
+              elif [[ "$MERGE_ERROR" == *"review"* ]]; then
+                echo "This appears to be related to required reviews. Make sure all required reviews have been approved."
+              elif [[ "$MERGE_ERROR" == *"protected branch"* ]]; then
+                echo "This appears to be related to branch protection rules."
+              elif [[ "$MERGE_ERROR" == *"permission"* ]] || [[ "$MERGE_ERROR" == *"Permission"* ]]; then
+                echo "This appears to be a permission issue. Make sure your PERSONAL_ACCESS_TOKEN has sufficient permissions."
+                echo "The token needs 'repo' scope for private repositories."
+              fi
+              
               exit 1
             fi
           else
-            echo "❌ PR is not mergeable at this time. Status: $MERGEABLE_STATE"
-            echo "This could be due to conflicts, failing checks, or required reviews."
+            echo "❌ PR is not mergeable at this time."
+            echo "Status: $MERGEABLE_STATE"
+            echo "This could be due to:"
+            echo "- Merge conflicts with the base branch"
+            echo "- Required status checks that haven't passed"
+            echo "- Required reviews that haven't been approved"
+            echo "- Branch protection rules preventing the merge"
+            
+            # Check for specific states and provide more detailed information
+            if [ "$MERGEABLE_STATE" = "behind" ]; then
+              echo "The PR branch is behind the base branch. It needs to be updated."
+            elif [ "$MERGEABLE_STATE" = "dirty" ]; then
+              echo "The PR has merge conflicts that need to be resolved."
+            elif [ "$MERGEABLE_STATE" = "blocked" ]; then
+              echo "The PR is blocked by branch protection rules."
+            elif [ "$MERGEABLE_STATE" = "unstable" ]; then
+              echo "The PR has failing status checks."
+            fi
+            
             exit 1
           fi
         env:
