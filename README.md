@@ -5,7 +5,7 @@ This GitHub Action automatically merges pull requests when they are created.
 ## How It Works
 
 The Auto-Merge Pull Request Action has two modes:
-lkj
+lkjsdf
 1. **Event-triggered**: When a pull request is opened, it attempts to merge it immediately
 2. **Manual trigger**: You can manually run the workflow on a specific PR by providing its number
 
