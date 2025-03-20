@@ -26,7 +26,7 @@ The workflow file is set up at `.github/workflows/project-auto-merge.yml`. To us
 This workflow uses your personal access token to interact with GitHub's API:
 
 1. Create a Personal Access Token (if you don't have one already):
-   - Go to your GitHub account settings: https://github.com/settings/tokens
+   - Go to your GitHub account settings: <https://github.com/settings/tokens>
    - Click "Generate new token" (classic)
    - Give your token a descriptive name (e.g., "Auto-Merge PR Token")
    - Select the following scopes:
@@ -46,9 +46,11 @@ This workflow uses your personal access token to interact with GitHub's API:
 ### 3. Usage
 
 The workflow will automatically run when:
+
 - A new pull request is opened
 
 You can also manually trigger it:
+
 1. Go to the Actions tab in your repository
 2. Select "Project Auto-Merge PRs" workflow
 3. Click "Run workflow"
@@ -60,6 +62,7 @@ You can also manually trigger it:
 To reuse this auto-merge workflow in other projects:
 
 1. **Copy the workflow file**:
+
    ```bash
    # From your current repository
    cp .github/workflows/project-auto-merge.yml /path/to/other-project/.github/workflows/
@@ -71,6 +74,7 @@ To reuse this auto-merge workflow in other projects:
    - Each repository needs its own secret configuration
 
 3. **Commit and push to the target repository**:
+
    ```bash
    cd /path/to/other-project
    git add .github/workflows/project-auto-merge.yml
@@ -95,6 +99,7 @@ By default, the workflow uses the "merge" method. You can customize this by:
 
 1. Manually selecting a different method (merge, squash, rebase) when triggering the workflow
 2. Editing the workflow file to change the default value:
+
    ```yaml
    merge_method:
      default: "merge"  # Change to "squash" or "rebase"
@@ -103,11 +108,13 @@ By default, the workflow uses the "merge" method. You can customize this by:
 ### Branch Protection Rules
 
 If your repository has branch protection rules, the auto-merge will only work if:
+
 - All required status checks have passed
 - Required reviews have been approved
 - Other protection rules are satisfied
 
 For PRs that are newly created, these conditions might not be met immediately. Consider:
+
 - Using this workflow for non-protected branches
 - Customizing branch protection to allow specific users/tokens to bypass restrictions
 
@@ -134,6 +141,7 @@ For PRs that are newly created, these conditions might not be met immediately. C
 ### Workflow Outputs
 
 The workflow provides the following outputs that can be used in subsequent steps:
+
 - `merge_success`: 'true' if the merge was successful, 'false' otherwise
 - `merge_sha`: The SHA of the merge commit if successful
 - `merge_error`: Error message if the merge failed
@@ -148,6 +156,7 @@ You can extend the workflow to add notifications by:
 2. Adding integrations with Slack, MS Teams, or email
 
 Example for Slack:
+
 ```yaml
 - name: Send Slack notification
   if: steps.merge.outputs.merge_success == 'true'
