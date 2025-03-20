@@ -1,18 +1,9 @@
-# GitHub Auto-Merge Pull Request Action
+# GitHub Auto-Merge Pufasdf
 
 This GitHub Action automatically merges pull requests when they are created, reopened, or marked as ready for review.
 
 ## How It Works
-
-When a pull request is opened, reopened, or marked as ready for review, this action:
-
-1. Checks if the pull request is mergeable
-2. Waits for GitHub to calculate the mergeable status if needed
-3. Automatically merges the pull request if it's mergeable
-4. Provides detailed logs about the merge process
-
-## Setup Instructions
-
+asfd
 ### 1. Create a Personal Access Token (PAT)
 
 You need a GitHub Personal Access Token with the necessary permissions to merge pull requests:
