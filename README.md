@@ -9,7 +9,7 @@ lkj
 1. **Event-triggered**: When a pull request is opened, it attempts to merge it immediately
 2. **Manual trigger**: You can manually run the workflow on a specific PR by providing its number
 
-When it runs, the action:
+When it runs, the action:sdf
 
 1. Verifies the PR is not in draft state
 2. Checks if the pull request is mergeable
