@@ -1,0 +1,94 @@
+name: Auto Merge Pull Requests
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  workflow_dispatch:
+    inputs:
+      merge_method:
+        description: "Merge method (merge, squash, rebase)"
+        required: false
+        default: "merge"
+        type: choice
+        options:
+          - merge
+          - squash
+          - rebase
+      pr_number:
+        description: "Pull request number to merge"
+        required: true
+        type: number
+
+jobs:
+  auto-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Auto-merge pull request
+        run: |
+          # Determine PR number based on trigger event
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            PR_NUMBER="${{ github.event.inputs.pr_number }}"
+          else
+            PR_NUMBER=$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }')
+          fi
+
+          echo "Processing PR #$PR_NUMBER"
+
+          # Get PR details
+          PR_DETAILS=$(curl -s -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER")
+
+          # Extract PR information
+          MERGEABLE=$(echo "$PR_DETAILS" | jq -r '.mergeable')
+          MERGEABLE_STATE=$(echo "$PR_DETAILS" | jq -r '.mergeable_state')
+          PR_TITLE=$(echo "$PR_DETAILS" | jq -r '.title')
+
+          echo "PR Status: Mergeable=$MERGEABLE, State=$MERGEABLE_STATE"
+
+          # Wait for mergeable status if it's null (GitHub is still calculating)
+          if [ "$MERGEABLE" = "null" ]; then
+            echo "Waiting for GitHub to calculate mergeable status..."
+            for i in {1..5}; do
+              sleep 5
+              PR_DETAILS=$(curl -s -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+                "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER")
+              MERGEABLE=$(echo "$PR_DETAILS" | jq -r '.mergeable')
+              MERGEABLE_STATE=$(echo "$PR_DETAILS" | jq -r '.mergeable_state')
+              echo "Attempt $i: Mergeable=$MERGEABLE, State=$MERGEABLE_STATE"
+              if [ "$MERGEABLE" != "null" ]; then
+                break
+              fi
+            done
+          fi
+
+          if [ "$MERGEABLE" = "true" ]; then
+            echo "PR is mergeable, proceeding with merge"
+            
+            # Set merge method based on repository settings or preference
+            # Options: merge, squash, rebase
+            MERGE_METHOD="${{ github.event.inputs.merge_method || 'merge' }}"
+            
+            # Merge the PR
+            MERGE_RESPONSE=$(curl -X PUT -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/merge" \
+              -d "{\"commit_title\":\"Auto-merge: $PR_TITLE\",\"commit_message\":\"Auto-merged PR #$PR_NUMBER\",\"merge_method\":\"$MERGE_METHOD\"}")
+            
+            MERGE_SUCCESS=$(echo "$MERGE_RESPONSE" | jq -r '.merged')
+            
+            if [ "$MERGE_SUCCESS" = "true" ]; then
+              echo "✅ PR #$PR_NUMBER has been auto-merged successfully"
+            else
+              MERGE_ERROR=$(echo "$MERGE_RESPONSE" | jq -r '.message')
+              echo "❌ Failed to merge PR: $MERGE_ERROR"
+              exit 1
+            fi
+          else
+            echo "❌ PR is not mergeable at this time. Status: $MERGEABLE_STATE"
+            echo "This could be due to conflicts, failing checks, or required reviews."
+            exit 1
+          fi
+        env:
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
