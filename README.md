@@ -1,6 +1,6 @@
 # GitHub Auto-Merge Pull Request Action
 
-This GitHub Action automatically merges pull requests when they are created.
+This GitHub Action automatically merges pull requests when they akkkre created.
 
 ## How It Works
 
