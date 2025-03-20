@@ -21,9 +21,6 @@ on:
 jobs:
   auto-merge:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -45,8 +42,8 @@ jobs:
 
           echo "Processing PR #$PR_NUMBER"
 
-          # Get PR details
-          PR_DETAILS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          # Get PR details - Using PERSONAL_ACCESS_TOKEN instead of GITHUB_TOKEN
+          PR_DETAILS=$(curl -s -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
             "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER")
 
           # Check if PR exists
@@ -77,7 +74,7 @@ jobs:
 
           # Force GitHub to recalculate the mergeable status by updating the PR
           echo "Triggering mergeable status recalculation..."
-          curl -s -X PUT -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+          curl -s -X PUT -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
             -H "Accept: application/vnd.github.v3+json" \
             "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER" \
             -d "{\"title\":\"$PR_TITLE\"}" > /dev/null
@@ -88,7 +85,7 @@ jobs:
             MAX_ATTEMPTS=10
             for i in $(seq 1 $MAX_ATTEMPTS); do
               sleep 5
-              PR_DETAILS=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              PR_DETAILS=$(curl -s -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
                 "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER")
               MERGEABLE=$(echo "$PR_DETAILS" | jq -r '.mergeable')
               MERGEABLE_STATE=$(echo "$PR_DETAILS" | jq -r '.mergeable_state')
@@ -112,9 +109,9 @@ jobs:
             MERGE_METHOD="${{ github.event.inputs.merge_method || 'merge' }}"
             echo "Using merge method: $MERGE_METHOD"
             
-            # Try to merge using GitHub's API
+            # Try to merge using GitHub's API - with personal token
             echo "Sending merge request to GitHub API..."
-            MERGE_RESPONSE=$(curl -X PUT -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            MERGE_RESPONSE=$(curl -X PUT -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/${{ github.repository }}/pulls/$PR_NUMBER/merge" \
               -d "{\"commit_title\":\"[Auto-merge] $PR_TITLE\",\"commit_message\":\"Auto-merged PR #$PR_NUMBER\",\"merge_method\":\"$MERGE_METHOD\"}")
@@ -128,8 +125,8 @@ jobs:
               echo "merge_success=true" >> $GITHUB_OUTPUT
               echo "merge_sha=$MERGE_SHA" >> $GITHUB_OUTPUT
               
-              # Add comment to PR to indicate it was auto-merged
-              curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              # Add comment to PR to indicate it was auto-merged - with personal token
+              curl -s -X POST -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
                 -H "Accept: application/vnd.github.v3+json" \
                 "https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
                 -d "{\"body\":\"🤖 This PR was automatically merged by the project's auto-merge workflow.\"}"
@@ -148,12 +145,12 @@ jobs:
               elif [[ "$MERGE_ERROR" == *"protected branch"* ]]; then
                 echo "This appears to be related to branch protection rules."
               elif [[ "$MERGE_ERROR" == *"permission"* ]] || [[ "$MERGE_ERROR" == *"Permission"* ]]; then
-                echo "This appears to be a permission issue. Make sure the workflow has sufficient permissions."
-                echo "Check that 'contents: write' and 'pull-requests: write' are set in the workflow permissions."
+                echo "This appears to be a permission issue. Make sure your PERSONAL_ACCESS_TOKEN has sufficient permissions."
+                echo "The token needs 'repo' scope for private repositories."
               fi
               
-              # Add comment to PR with failure info
-              curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+              # Add comment to PR with failure info - with personal token
+              curl -s -X POST -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
                 -H "Accept: application/vnd.github.v3+json" \
                 "https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
                 -d "{\"body\":\"⚠️ Auto-merge failed: $MERGE_ERROR\n\nPlease check the workflow logs for more details.\"}"
@@ -180,14 +177,17 @@ jobs:
               FAILURE_REASON="The PR cannot be merged in its current state."
             fi
             
-            # Add comment to PR with failure info
-            curl -s -X POST -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            # Add comment to PR with failure info - with personal token
+            curl -s -X POST -H "Authorization: token ${{ secrets.PERSONAL_ACCESS_TOKEN }}" \
               -H "Accept: application/vnd.github.v3+json" \
               "https://api.github.com/repos/${{ github.repository }}/issues/$PR_NUMBER/comments" \
               -d "{\"body\":\"⚠️ Auto-merge failed: $FAILURE_REASON\n\nState: $MERGEABLE_STATE\"}"
             
             exit 1
           fi
+        env:
+          # Expose the token as an environment variable (optional, for additional security)
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
       - name: Send notification on successful merge
         if: steps.merge.outputs.merge_success == 'true'
